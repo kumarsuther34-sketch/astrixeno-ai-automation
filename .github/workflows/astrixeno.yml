@@ -15,7 +15,7 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -34,6 +34,7 @@ jobs:
           python - <<'PY'
           import os
           import json
+          import time
           import urllib.request
           import urllib.error
 
@@ -41,24 +42,23 @@ jobs:
           topic = os.environ["VIDEO_TOPIC"]
 
           prompt = f"""
-          You are the professional content creator for ASTRIXENO,
-          a global English AI technology YouTube channel.
+          Create a complete original YouTube production package
+          for ASTRIXENO, a global English AI technology channel.
 
-          Create a complete original YouTube video package about:
-          {topic}
+          Topic: {topic}
 
           Requirements:
-          - 4 to 5 minute engaging video.
+          - Engaging 4 to 5 minute video script.
           - Strong opening hook.
           - Accurate and useful information.
-          - Natural English male voiceover script.
+          - Natural English voiceover.
           - Scene-by-scene visual directions.
           - Title, thumbnail text and description.
           - Relevant hashtags.
-          - Strong subscription call to action.
-          - Do not invent facts or statistics.
+          - Subscription call to action.
+          - Never invent facts or statistics.
 
-          Return the complete production package in Markdown.
+          Return the complete package in Markdown.
           """
 
           url = (
@@ -67,48 +67,70 @@ jobs:
           )
 
           payload = {
-              "contents": [{
-                  "parts": [{"text": prompt}]
-              }],
+              "contents": [{"parts": [{"text": prompt}]}],
               "generationConfig": {
                   "maxOutputTokens": 5000,
                   "temperature": 0.7
               }
           }
 
-          request = urllib.request.Request(
-              url,
-              data=json.dumps(payload).encode("utf-8"),
-              headers={
-                  "Content-Type": "application/json",
-                  "x-goog-api-key": api_key
-              },
-              method="POST"
-          )
+          data = json.dumps(payload).encode("utf-8")
 
-          try:
-              with urllib.request.urlopen(request, timeout=120) as response:
-                  result = json.loads(response.read())
+          for attempt in range(1, 4):
+              try:
+                  request = urllib.request.Request(
+                      url,
+                      data=data,
+                      headers={
+                          "Content-Type": "application/json",
+                          "x-goog-api-key": api_key
+                      },
+                      method="POST"
+                  )
 
-              parts = result["candidates"][0]["content"]["parts"]
-              script = "\n".join(
-                  part["text"] for part in parts if "text" in part
-              )
+                  with urllib.request.urlopen(
+                      request, timeout=120
+                  ) as response:
+                      result = json.loads(response.read())
 
-              os.makedirs("output", exist_ok=True)
+                  parts = result["candidates"][0]["content"]["parts"]
+                  script = "\n".join(
+                      p["text"] for p in parts if "text" in p
+                  )
 
-              with open(
-                  "output/ASTRIXENO_video_script.md",
-                  "w",
-                  encoding="utf-8"
-              ) as file:
-                  file.write(script)
+                  if not script.strip():
+                      raise RuntimeError("Gemini returned empty text")
 
-              print("ASTRIXENO script generated successfully!")
+                  os.makedirs("output", exist_ok=True)
 
-          except Exception as error:
-              print("Script generation failed:", str(error))
-              raise
+                  with open(
+                      "output/ASTRIXENO_video_script.md",
+                      "w",
+                      encoding="utf-8"
+                  ) as f:
+                      f.write(script)
+
+                  print("ASTRIXENO script generated successfully!")
+                  break
+
+              except urllib.error.HTTPError as error:
+                  print(f"Attempt {attempt} failed: HTTP {error.code}")
+
+                  if error.code not in (429, 500, 502, 503, 504):
+                      raise
+
+                  if attempt == 3:
+                      raise
+
+                  time.sleep(attempt * 15)
+
+              except Exception as error:
+                  print(f"Attempt {attempt} failed: {error}")
+
+                  if attempt == 3:
+                      raise
+
+                  time.sleep(attempt * 15)
           PY
 
       - name: Save generated script
@@ -118,4 +140,3 @@ jobs:
           path: output/ASTRIXENO_video_script.md
           if-no-files-found: error
           retention-days: 7
-
