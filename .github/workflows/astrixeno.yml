@@ -3,8 +3,11 @@ name: ASTRIXENO AI Automation
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 8 * * *"
+    inputs:
+      topic:
+        description: "Video topic"
+        required: true
+        default: "5 AI Tools That Feel Like Magic in 2026"
 
 permissions:
   contents: read
@@ -12,6 +15,8 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +26,96 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Start ASTRIXENO
+      - name: Generate video script with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VIDEO_TOPIC: ${{ inputs.topic }}
         run: |
-          echo "ASTRIXENO cloud automation started"
-          echo "Next: AI script, voice, video and review pipeline"
+          python - <<'PY'
+          import os
+          import json
+          import urllib.request
+          import urllib.error
+
+          api_key = os.environ["GEMINI_API_KEY"]
+          topic = os.environ["VIDEO_TOPIC"]
+
+          prompt = f"""
+          You are the professional content creator for ASTRIXENO,
+          a global English AI technology YouTube channel.
+
+          Create a complete original YouTube video package about:
+          {topic}
+
+          Requirements:
+          - 4 to 5 minute engaging video.
+          - Strong opening hook.
+          - Accurate and useful information.
+          - Natural English male voiceover script.
+          - Scene-by-scene visual directions.
+          - Title, thumbnail text and description.
+          - Relevant hashtags.
+          - Strong subscription call to action.
+          - Do not invent facts or statistics.
+
+          Return the complete production package in Markdown.
+          """
+
+          url = (
+              "https://generativelanguage.googleapis.com/v1beta/"
+              "models/gemini-3.8-flash:generateContent"
+          )
+
+          payload = {
+              "contents": [{
+                  "parts": [{"text": prompt}]
+              }],
+              "generationConfig": {
+                  "maxOutputTokens": 5000,
+                  "temperature": 0.7
+              }
+          }
+
+          request = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": api_key
+              },
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  result = json.loads(response.read())
+
+              parts = result["candidates"][0]["content"]["parts"]
+              script = "\n".join(
+                  part["text"] for part in parts if "text" in part
+              )
+
+              os.makedirs("output", exist_ok=True)
+
+              with open(
+                  "output/ASTRIXENO_video_script.md",
+                  "w",
+                  encoding="utf-8"
+              ) as file:
+                  file.write(script)
+
+              print("ASTRIXENO script generated successfully!")
+
+          except Exception as error:
+              print("Script generation failed:", str(error))
+              raise
+          PY
+
+      - name: Save generated script
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASTRIXENO-Video-Script
+          path: output/ASTRIXENO_video_script.md
+          if-no-files-found: error
+          retention-days: 7
+
