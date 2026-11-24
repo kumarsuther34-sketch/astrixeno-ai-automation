@@ -1,0 +1,22 @@
+{
+    "channel": "ASTRIXENO",
+    "schedule": "daily",
+    "videos_per_day": 1,
+    "format": "YouTube Shorts",
+    "language": "English",
+    "voice": "en-US-GuyNeural",
+    "upload_privacy": "private",
+    "approval_required": true,
+    "retry_failed_tasks": true,
+    "avoid_duplicate_topics": true,
+    "queue": [
+        {
+            "date": "2026-11-22",
+            "topic": "5 AI Tools Changing the World in 2026",
+            "status": "pending",
+            "attempts": 0,
+            "approval": "required",
+            "video_file": null
+        }
+    ]
+}

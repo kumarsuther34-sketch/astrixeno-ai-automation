@@ -1,0 +1,10 @@
+.env
+credentials.json
+token.json
+*.log
+__pycache__/
+*.pyc
+audio/
+output/
+videos/
+assets/
