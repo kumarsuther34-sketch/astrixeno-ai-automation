@@ -1,0 +1,142 @@
+
+name: ASTRIXENO AI Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Video topic"
+        required: true
+        default: "5 AI Tools That Feel Like Magic in 2026"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate video script with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VIDEO_TOPIC: ${{ inputs.topic }}
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import time
+          import urllib.request
+          import urllib.error
+
+          api_key = os.environ["GEMINI_API_KEY"]
+          topic = os.environ["VIDEO_TOPIC"]
+
+          prompt = f"""
+          Create a complete original YouTube production package
+          for ASTRIXENO, a global English AI technology channel.
+
+          Topic: {topic}
+
+          Requirements:
+          - Engaging 4 to 5 minute video script.
+          - Strong opening hook.
+          - Accurate and useful information.
+          - Natural English voiceover.
+          - Scene-by-scene visual directions.
+          - Title, thumbnail text and description.
+          - Relevant hashtags.
+          - Subscription call to action.
+          - Never invent facts or statistics.
+
+          Return the complete package in Markdown.
+          """
+
+          url = (
+              "https://generativelanguage.googleapis.com/v1beta/"
+              "models/gemini-3.6-flash:generateContent"
+          )
+
+          payload = {
+              "contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {
+                  "maxOutputTokens": 5000,
+                  "temperature": 0.7
+              }
+          }
+
+          data = json.dumps(payload).encode("utf-8")
+
+          for attempt in range(1, 4):
+              try:
+                  request = urllib.request.Request(
+                      url,
+                      data=data,
+                      headers={
+                          "Content-Type": "application/json",
+                          "x-goog-api-key": api_key
+                      },
+                      method="POST"
+                  )
+
+                  with urllib.request.urlopen(
+                      request, timeout=120
+                  ) as response:
+                      result = json.loads(response.read())
+
+                  parts = result["candidates"][0]["content"]["parts"]
+                  script = "\n".join(
+                      p["text"] for p in parts if "text" in p
+                  )
+
+                  if not script.strip():
+                      raise RuntimeError("Gemini returned empty text")
+
+                  os.makedirs("output", exist_ok=True)
+
+                  with open(
+                      "output/ASTRIXENO_video_script.md",
+                      "w",
+                      encoding="utf-8"
+                  ) as f:
+                      f.write(script)
+
+                  print("ASTRIXENO script generated successfully!")
+                  break
+
+              except urllib.error.HTTPError as error:
+                  print(f"Attempt {attempt} failed: HTTP {error.code}")
+
+                  if error.code not in (429, 500, 502, 503, 504):
+                      raise
+
+                  if attempt == 3:
+                      raise
+
+                  time.sleep(attempt * 15)
+
+              except Exception as error:
+                  print(f"Attempt {attempt} failed: {error}")
+
+                  if attempt == 3:
+                      raise
+
+                  time.sleep(attempt * 15)
+          PY
+
+      - name: Save generated script
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASTRIXENO-Video-Script
+          path: output/ASTRIXENO_video_script.md
+          if-no-files-found: error
+          retention-days: 7
